@@ -1,0 +1,15 @@
+.idea
+*~
+*.o
+*.exe
+*.bin
+\#*\#
+out.*
+trans_count.txt
+cmake-build-debug
+testing
+CVS
+*.tar
+*.tgz
+*.gz
+
