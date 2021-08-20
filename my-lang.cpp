@@ -125,6 +125,91 @@ public:
                 : Proto(std::move(Proto)), Body(std::move(Body)) {}
 };
 
+static int CurTok;
+static int getNextToken() {
+   return CurTok = gettok();
+}
+
+static std::unique_ptr<ExprAST>  LogError(const char *Str) {
+   fprintf(stderr, "LogError: %s\n", Str);
+   return nullptr;
+}
+
+static std::unique_ptr<PrototypeAST>  LogErrorP(const char *Str) {
+   LogError(Str);
+   return nullptr;
+}
+
+static std::unique_ptr<ExprAST>  ParseNumberExpr() {
+   auto Result = std::make_unique<NumberExprAST>(NumVal);
+   getNextToken();
+   return std::move(Result);
+}
+
+static std::unique_ptr<ExprAST>  ParseParenExpr() {
+   getNextToken();
+   auto V = ParseExpression();
+   if (!V)
+      return nullptr;
+
+   if (CurTok == ')') {
+      getNextToken();
+   }
+   else {
+      return LogError("Expecting ')'");
+   }
+   return V;
+}
+
+static std::unique_ptr<ExprAST> ParseIdentifierOrCallExpr() {
+   std::string IdName = IdentifierStr;
+
+   getNextToken();
+   if (CurTok == '(') {
+      // function call
+      getNextToken();
+      std::vector<std::unique_ptr<ExprAST>> Args;
+      // construct argument list
+      while (true) {
+         auto Arg = ParseExpression();
+         if (Arg) {
+            Args.push_back(Arg);
+         }
+         else {
+            return LogError("Argument is null");
+         }
+
+         if (CurTok == ')') {
+            getNextToken();
+            break;
+         }
+         else if (CurTok == ',') {
+            getNextToken();
+            continue;
+         }
+         else {
+            return LogError("Expected ')' or ',' in argument list");
+         }
+      }
+      return std::make_unique<CallExprAST>(IdName, std::move(Args));
+   }
+   else {
+      return std::make_unique<VariableExprAST>(IdName);
+   }
+}
+
+static std::unique_ptr<ExprAST> ParsePrimary() {
+   switch(CurTok) {
+      case tok_identifier:
+         return ParseIdentifierOrCallExpr();
+      case tok_number:
+         return ParseNumberExpr();
+      case '(':
+         return ParseParenExpr();
+      default:
+         return LogError("Unknown token when expecting an expression");
+   }
+}
 #if 0
 int main() {
     while (true) {
@@ -133,3 +218,11 @@ int main() {
     }
 }
 #endif // 0
+
+
+
+
+
+
+
+
