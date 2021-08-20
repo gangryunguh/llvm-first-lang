@@ -126,6 +126,10 @@ public:
                 : Proto(std::move(Proto)), Body(std::move(Body)) {}
 };
 
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
+                                              std::unique_ptr<ExprAST> LHS);
+static std::unique_ptr<ExprAST> ParseExpression();
+
 static int CurTok;
 static int getNextToken() {
    return CurTok = gettok();
@@ -174,7 +178,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierOrCallExpr() {
       while (true) {
          auto Arg = ParseExpression();
          if (Arg) {
-            Args.push_back(Arg);
+            Args.push_back(std::move(Arg));
          }
          else {
             return LogError("Argument is null");
@@ -231,7 +235,7 @@ static int GetTokPrecedence() {
 
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
                                               std::unique_ptr<ExprAST> LHS)
-{
+                                              {
    while (true) {
       int TokPrec = GetTokPrecedence();
 
@@ -272,6 +276,129 @@ static std::unique_ptr<ExprAST> ParseExpression() {
 
 }
 
+static std::unique_ptr<PrototypeAST> ParsePrototype() {
+   if (CurTok != tok_identifier)
+      return LogErrorP("Expected function name in prototyp");
+
+   std::string FnName = IdentifierStr;
+   getNextToken();
+
+   if (CurTok != '(')
+      return LogErrorP("Expected '(' in prototype");
+
+   // Read the list of argument names.
+   std::vector<std::string> ArgNames;
+   while (getNextToken() == tok_identifier)
+      ArgNames.push_back(IdentifierStr);
+   if (CurTok != ')')
+      return LogErrorP("Expected ')' in prototype");
+
+   getNextToken(); // eat ')'
+   return std::make_unique<PrototypeAST>(FnName, std::move(ArgNames));
+}
+
+static std::unique_ptr<FunctionAST> ParseDefinition() {
+
+   getNextToken(); // eat def.
+   auto Proto = ParsePrototype();
+   if (!Proto)
+      return nullptr;
+
+   auto E = ParseExpression();
+   if (E) {
+      return std::make_unique<FunctionAST>(std::move(Proto),std::move(E));
+   }
+   else {
+      return nullptr;
+   }
+}
+
+static std::unique_ptr<PrototypeAST> ParseExtern() {
+   getNextToken(); // eat extern.
+   return ParsePrototype();
+}
+
+static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
+   auto E = ParseExpression();
+   if (E) {
+      auto Proto = std::make_unique<PrototypeAST>("",
+                                                  std::vector<std::string>());
+      return std::make_unique<FunctionAST>(std::move(Proto),std::move(E));
+   }
+   else
+      return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
+// Top-Level parsing
+//===----------------------------------------------------------------------===//
+
+static void HandleDefinition() {
+   if (ParseDefinition()) {
+      fprintf(stderr, "Parsed a function definition.\n");
+   } else {
+      // Skip token for error recovery.
+      getNextToken();
+   }
+}
+
+static void HandleExtern() {
+   if (ParseExtern()) {
+      fprintf(stderr, "Parsed an extern\n");
+   } else {
+      // Skip token for error recovery.
+      getNextToken();
+   }
+}
+
+static void HandleTopLevelExpression() {
+   // Evaluate a top-level expression into an anonymous function.
+   if (ParseTopLevelExpr()) {
+      fprintf(stderr, "Parsed a top-level expr\n");
+   } else {
+      // Skip token for error recovery.
+      getNextToken();
+   }
+}
+
+/// top ::= definition | external | expression | ';'
+static void MainLoop() {
+   while (true) {
+      fprintf(stderr, "ready> ");
+      switch (CurTok) {
+         case tok_eof:
+            return;
+         case ';': // ignore top-level semicolons.
+            getNextToken();
+         break;
+         case tok_def:
+            HandleDefinition();
+            break;
+         case tok_extern:
+            HandleExtern();
+            break;
+         default:
+            HandleTopLevelExpression();
+            break;
+      }
+   }
+}
+
+//===----------------------------------------------------------------------===//
+// Main driver code.
+//===----------------------------------------------------------------------===//
+
+int main() {
+
+   // Prime the first token.
+   fprintf(stderr, "ready> ");
+   getNextToken();
+
+   // Run the main "interpreter loop" now.
+   MainLoop();
+
+   return 0;
+}
 
 
 #if 0
