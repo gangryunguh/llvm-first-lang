@@ -4,6 +4,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <map>
 
 // The lexer returns tokens [0-255] if it is an unknown character, otherwise one
 // of these for known things.
@@ -210,6 +211,69 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
          return LogError("Unknown token when expecting an expression");
    }
 }
+
+static int GetTokPrecedence() {
+
+   switch(CurTok) {
+      case '<':
+      case '>':
+         return 10;
+      case '+':
+      case '-':
+         return 20;
+      case '*':
+      case '/':
+         return 40;
+      default:
+         return -1;
+   }
+}
+
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
+                                              std::unique_ptr<ExprAST> LHS)
+{
+   while (true) {
+      int TokPrec = GetTokPrecedence();
+
+      if (TokPrec < ExprPrec) {
+         return LHS;
+      }
+      else {
+         int BinOp = CurTok;
+         getNextToken();
+
+         auto RHS = ParsePrimary();
+         if (RHS) {
+            int NextPrec = GetTokPrecedence(); // NextPrec is a lookahead
+            if (TokPrec < NextPrec) {
+               RHS = ParseBinOpRHS(TokPrec+1, std::move(RHS));
+               if (!RHS) {
+                  return nullptr;
+               }
+            }
+            else {
+               LHS = std::make_unique<BinaryExprAST>(BinOp,
+                                                     std::move(LHS),
+                                                     std::move(RHS));
+            }
+         }
+         else
+            return nullptr;
+      }
+   }
+}
+
+static std::unique_ptr<ExprAST> ParseExpression() {
+   auto LHS = ParsePrimary();
+   if (LHS) {
+      return ParseBinOpRHS(0, std::move(LHS));
+   }
+   return nullptr;
+
+}
+
+
+
 #if 0
 int main() {
     while (true) {
