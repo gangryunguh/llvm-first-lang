@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.19)
 project(llvm_first_lang)
 
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS "-fpermissive -g -O0 -DDEBUG")
+set(CMAKE_CXX_FLAGS "-fpermissive -O0 -DDEBUG")
 
 #set (CMAKE_PREFIX_PATH "/usr/local")
-set (CMAKE_PREFIX_PATH "/Users/uh/LLVM/llvm-project-11.0.0/llvm/cmake-build-debug")
+set (CMAKE_PREFIX_PATH "/Users/uh/LLVM/llvm-project-12.0.1/llvm/cmake-build-llvm-build")
 find_package(LLVM REQUIRED CONFIG)
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
