@@ -9,9 +9,15 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -90,6 +96,7 @@ static LLVMContext TheContext;
 static IRBuilder<> Builder(TheContext);
 static std::unique_ptr<Module> TheModule;
 static std::map<std::string, Value *> NamedValues;
+static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 
 // class and function declaration
 class ExprAST;
@@ -254,8 +261,15 @@ public:
 
       Value *RetVal = Body->codegen();
       if (RetVal) {
+         // Finish off the function
          Builder.CreateRet(RetVal);
+
+         // Validate the generated code, checking for consistency
          verifyFunction(*TheFunction);
+
+         // Optimize the function
+         TheFPM->run(*TheFunction);
+
          return TheFunction;
       }
       else {
@@ -471,8 +485,20 @@ static void InitializeModule() {
    //TheContext = std::make_unique<LLVMContext>();
    TheModule = std::make_unique<Module>("my cool jit", TheContext);
 
-   // Create a new builder for the module.
-   //Builder = std::make_unique<IRBuilder<>>(TheContext);
+
+   // Create a new pass manager attached to it.
+   TheFPM = std::make_unique<legacy::FunctionPassManager>(TheModule.get());
+
+   // Do simple "peephole" optimizations and bit-twiddling optzns.
+   TheFPM->add(createInstructionCombiningPass());
+   // Reassociate expressions.
+   TheFPM->add(createReassociatePass());
+   // Eliminate Common SubExpressions.
+   TheFPM->add(createGVNPass());
+   // Simplify the control flow graph (deleting unreachable blocks, etc).
+   TheFPM->add(createCFGSimplificationPass());
+
+   TheFPM->doInitialization();
 }
 
 static void HandleDefinition() {
