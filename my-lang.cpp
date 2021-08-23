@@ -370,7 +370,7 @@ static int GetTokPrecedence() {
 
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
                                               std::unique_ptr<ExprAST> LHS)
-                                              {
+{
    while (true) {
       int TokPrec = GetTokPrecedence();
 
@@ -390,11 +390,9 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
                   return nullptr;
                }
             }
-            else {
-               LHS = std::make_unique<BinaryExprAST>(BinOp,
-                                                     std::move(LHS),
-                                                     std::move(RHS));
-            }
+            LHS = std::make_unique<BinaryExprAST>(BinOp,
+                                                  std::move(LHS),
+                                                  std::move(RHS));
          }
          else
             return nullptr;
