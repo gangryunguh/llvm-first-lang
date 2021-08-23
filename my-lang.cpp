@@ -86,9 +86,9 @@ static int gettok() {
 }
 
 // global
-static std::unique_ptr<LLVMContext> TheContext;
+static LLVMContext TheContext;
+static IRBuilder<> Builder(TheContext);
 static std::unique_ptr<Module> TheModule;
-static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, Value *> NamedValues;
 
 // class and function declaration
@@ -116,7 +116,7 @@ public:
     Value *codegen() {
        //return ConstantFP::get(TheContext, APFloat(Val));
        //return ConstantFP::get(Type::getDoubleTy(TheContext), APFloat(Val));
-       return ConstantFP::get(Type::getDoubleTy(*TheContext), APFloat(Val));
+       return ConstantFP::get(Type::getDoubleTy(TheContext), APFloat(Val));
     }
 };
 
@@ -149,15 +149,15 @@ public:
 
        switch (Op) {
           case '+':
-             return Builder->CreateFAdd(L,R, "addtmp");
+             return Builder.CreateFAdd(L,R, "addtmp");
           case '-':
-             return Builder->CreateFSub(L,R, "subtmp");
+             return Builder.CreateFSub(L,R, "subtmp");
           case '*':
-             return Builder->CreateFMul(L,R, "multmp");
+             return Builder.CreateFMul(L,R, "multmp");
           case '<':
-             L = Builder->CreateFCmpULT(L,R, "cmptmp");
+             L = Builder.CreateFCmpULT(L,R, "cmptmp");
              // convert bool 0/1 to double 0.0 or 1.0
-             return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext),
+             return Builder.CreateUIToFP(L, Type::getDoubleTy(TheContext),
                                          "booltmp");
           default:
              LogError("invalid binary operator");
@@ -191,7 +191,7 @@ public:
             return nullptr;
       }
 
-      return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
+      return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
    }
 };
 
@@ -205,8 +205,8 @@ public:
 
     const std::string &getName() const { return Name; }
     Function *codegen() {
-       std::vector<Type *> Doubles(Args.size(), Type::getDoubleTy(*TheContext));
-       FunctionType *FT = FunctionType::get(Type::getDoubleTy(*TheContext),
+       std::vector<Type *> Doubles(Args.size(), Type::getDoubleTy(TheContext));
+       FunctionType *FT = FunctionType::get(Type::getDoubleTy(TheContext),
                                             Doubles, false);
        Function *F = Function::Create(FT, Function::ExternalLinkage, Name,
                                       TheModule.get());
@@ -244,8 +244,8 @@ public:
          return nullptr;
       }
 
-      BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
-      Builder->SetInsertPoint(BB);
+      BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
+      Builder.SetInsertPoint(BB);
 
       NamedValues.clear();
       for (auto &Arg : TheFunction->args()) {
@@ -254,7 +254,7 @@ public:
 
       Value *RetVal = Body->codegen();
       if (RetVal) {
-         Builder->CreateRet(RetVal);
+         Builder.CreateRet(RetVal);
          verifyFunction(*TheFunction);
          return TheFunction;
       }
@@ -463,45 +463,16 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
 }
 
 //===----------------------------------------------------------------------===//
-// Top-Level parsing
+// Top-Level parsing and codegen
 //===----------------------------------------------------------------------===//
-#ifdef parsing
-static void HandleDefinition() {
-   if (ParseDefinition()) {
-      fprintf(stderr, "Parsed a function definition.\n");
-   } else {
-      // Skip token for error recovery.
-      getNextToken();
-   }
-}
-
-static void HandleExtern() {
-   if (ParseExtern()) {
-      fprintf(stderr, "Parsed an extern\n");
-   } else {
-      // Skip token for error recovery.
-      getNextToken();
-   }
-}
-
-static void HandleTopLevelExpression() {
-   // Evaluate a top-level expression into an anonymous function.
-   if (ParseTopLevelExpr()) {
-      fprintf(stderr, "Parsed a top-level expr\n");
-   } else {
-      // Skip token for error recovery.
-      getNextToken();
-   }
-}
-#else // codegen
 
 static void InitializeModule() {
    // Open a new context and module.
-   TheContext = std::make_unique<LLVMContext>();
-   TheModule = std::make_unique<Module>("my cool jit", *TheContext);
+   //TheContext = std::make_unique<LLVMContext>();
+   TheModule = std::make_unique<Module>("my cool jit", TheContext);
 
    // Create a new builder for the module.
-   Builder = std::make_unique<IRBuilder<>>(*TheContext);
+   //Builder = std::make_unique<IRBuilder<>>(TheContext);
 }
 
 static void HandleDefinition() {
@@ -546,7 +517,6 @@ static void HandleTopLevelExpression() {
       getNextToken();
    }
 }
-#endif
 
 /// top ::= definition | external | expression | ';'
 static void MainLoop() {
