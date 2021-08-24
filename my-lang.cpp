@@ -18,6 +18,7 @@
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "KaleidoscopeJIT.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -28,6 +29,7 @@
 #include <vector>
 
 using namespace llvm;
+using namespace llvm::orc;
 
 // The lexer returns tokens [0-255] if it is an unknown character, otherwise one
 // of these for known things.
@@ -95,8 +97,10 @@ static int gettok() {
 static LLVMContext TheContext;
 static IRBuilder<> Builder(TheContext);
 static std::unique_ptr<Module> TheModule;
-static std::map<std::string, Value *> NamedValues;
 static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
+static std::unique_ptr<KaleidoscopeJIT> TheJIT;
+static std::map<std::string, Value *> NamedValues;
+static ExitOnError ExitOnErr;
 
 // class and function declaration
 class ExprAST;
@@ -480,11 +484,11 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
 // Top-Level parsing and codegen
 //===----------------------------------------------------------------------===//
 
-static void InitializeModule() {
+static void InitializeModulePasses() {
    // Open a new context and module.
    //TheContext = std::make_unique<LLVMContext>();
    TheModule = std::make_unique<Module>("my cool jit", TheContext);
-
+   TheModule->setDataLayout(TheJIT->getDataLayout());
 
    // Create a new pass manager attached to it.
    TheFPM = std::make_unique<legacy::FunctionPassManager>(TheModule.get());
@@ -535,6 +539,8 @@ static void HandleTopLevelExpression() {
          FnIR->print(errs());
          fprintf(stderr, "\n");
 
+         auto H = TheJIT->addModule(std::move(TheModule));
+
          // Remove the anonymous expression.
          FnIR->eraseFromParent();
       }
@@ -573,11 +579,16 @@ static void MainLoop() {
 
 int main() {
 
+   InitializeNativeTarget();
+   InitializeNativeTargetAsmPrinter();
+   InitializeNativeTargetAsmParser();
+
    // Prime the first token.
    fprintf(stderr, "ready> ");
    getNextToken();
 
-   InitializeModule();
+   TheJIT = ExitOnErr(KaleidoscopeJIT::Create());
+   InitializeModulePasses();
 
    // Run the main "interpreter loop" now.
    MainLoop();
