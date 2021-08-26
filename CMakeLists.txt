@@ -11,8 +11,24 @@ include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 add_executable(llvm_first_lang my-lang.cpp)
+#add_executable(llvm_first_lang toy.cpp)
 
-llvm_map_components_to_libnames(llvm_libs support core irreader native)
+llvm_map_components_to_libnames(llvm_libs
+        support
+        core
+        irreader
+        native
+        Analysis
+        Core
+        ExecutionEngine
+        InstCombine
+        Object
+        OrcJIT
+        RuntimeDyld
+        ScalarOpts
+        Support
+        TransformUtils)
+
 target_link_libraries(llvm_first_lang ${llvm_libs})
 #set(CMAKE_PREFIX_PATH "/usr/local")
 #set(FLEX_EXECUTABLE "/usr/local/Cellar/flex/2.6.4_2/bin/flex")
