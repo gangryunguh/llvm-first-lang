@@ -568,7 +568,8 @@ static void HandleTopLevelExpression() {
          double (*FP)() = (double (*)())(intptr_t)ExprSymbol.getAddress();
          fprintf(stderr, "Evaluated to %f\n", FP());
 
-         //FnIR->eraseFromParent();
+         // Delete the anonymous expression module from the JIT.
+         ExitOnErr(RT->remove());
       }
    } else {
       // Skip token for error recovery.
