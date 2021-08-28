@@ -14,10 +14,6 @@ add_executable(llvm_first_lang my-lang.cpp)
 #add_executable(llvm_first_lang toy.cpp)
 
 llvm_map_components_to_libnames(llvm_libs
-        support
-        core
-        irreader
-        native
         Analysis
         Core
         ExecutionEngine
@@ -27,7 +23,9 @@ llvm_map_components_to_libnames(llvm_libs
         RuntimeDyld
         ScalarOpts
         Support
-        TransformUtils)
+        TransformUtils
+        native
+        )
 
 target_link_libraries(llvm_first_lang ${llvm_libs})
 #set(CMAKE_PREFIX_PATH "/usr/local")

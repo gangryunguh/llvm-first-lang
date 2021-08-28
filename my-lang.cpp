@@ -93,18 +93,21 @@ static int gettok() {
     return ThisChar;
 }
 
+// forward class and function declaration
+class ExprAST;
+class PrototypeAST;
+Function *getFunction(std::string Name);
+
 // global
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, Value *> NamedValues;
+static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 static ExitOnError ExitOnErr;
 
-// class and function declaration
-class ExprAST;
-class PrototypeAST;
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
                                               std::unique_ptr<ExprAST> LHS);
 static std::unique_ptr<ExprAST> ParseExpression();
@@ -185,7 +188,8 @@ public:
                 std::vector<std::unique_ptr<ExprAST>> Args)
                 : Callee(Callee), Args(std::move(Args)) {}
    Value *codegen() {
-      Function *CalleeF = TheModule->getFunction(Callee);
+       //Function *CalleeF = TheModule->getFunction(Callee);
+      Function *CalleeF = getFunction(Callee);
       if (!CalleeF) {
          LogError("Unknown function referenced");
          return nullptr;
@@ -238,8 +242,14 @@ public:
     FunctionAST(std::unique_ptr<PrototypeAST> Proto,
                 std::unique_ptr<ExprAST> Body)
                 : Proto(std::move(Proto)), Body(std::move(Body)) {}
+
    Function *codegen() {
-      Function *TheFunction = TheModule->getFunction(Proto->getName());
+
+      //Function *TheFunction = TheModule->getFunction(Proto->getName());
+
+      auto Name = Proto->getName();
+      FunctionProtos[Name] = std::move(Proto);
+      Function *TheFunction = getFunction(Name);
 
       if (!TheFunction) {
          TheFunction = Proto->codegen();
@@ -250,10 +260,10 @@ public:
          return nullptr;
       }
 
-      if (!TheFunction->empty()) {
-         LogError("Function cannot be redefined");
-         return nullptr;
-      }
+      //if (!TheFunction->empty()) {
+      //   LogError("Function cannot be redefined");
+      //   return nullptr;
+      //}
 
       BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
       Builder->SetInsertPoint(BB);
@@ -524,6 +534,9 @@ static void HandleDefinition() {
          fprintf(stderr, "Read function definition:\n");
          FnIR->print(errs());
          fprintf(stderr, "\n");
+         ExitOnErr(TheJIT->addModule(
+                 ThreadSafeModule(std::move(TheModule), std::move(TheContext))));
+         InitializeModulePassManager();
       }
    } else {
       // Skip token for error recovery.
@@ -537,6 +550,7 @@ static void HandleExtern() {
          fprintf(stderr, "Read extern: \n");
          FnIR->print(errs());
          fprintf(stderr, "\n");
+         FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
       }
    } else {
       // Skip token for error recovery.
@@ -598,6 +612,21 @@ static void MainLoop() {
             break;
       }
    }
+}
+
+Function *getFunction(std::string Name) {
+    // First, see if the function has already been added to the current module.
+    if (auto *F = TheModule->getFunction(Name))
+        return F;
+
+    // If not, check whether we can codegen the declaration from some existing
+    // prototype.
+    auto FI = FunctionProtos.find(Name);
+    if (FI != FunctionProtos.end())
+        return FI->second->codegen();
+
+    // If no existing prototype exists, return null.
+    return nullptr;
 }
 
 //===----------------------------------------------------------------------===//
